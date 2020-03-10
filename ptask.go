@@ -96,6 +96,7 @@ type Ptask struct {
 	color       aurora.Aurora
 	compact     bool
 	termHeight  int
+	termWidth   int
 	onlyErrors  bool
 	noVerbose   bool
 	notDrawable bool
@@ -166,13 +167,15 @@ func AllInOneOpt(onlyErrors, noVerbose, compact, forceTty, notDrawable, noHeader
 func NewPtask(output io.Writer, workerFunc func(*Job), opts ...optFunc) *Ptask {
 	tty := false
 	height := 0
+	width := 0
 	if f, ok := output.(*os.File); ok {
 		if !tty {
 			tty = isatty.IsTerminal(f.Fd())
 		}
-		_, tmpHeight, err := terminal.GetSize(int(os.Stdout.Fd()))
+		tmpWidth, tmpHeight, err := terminal.GetSize(int(os.Stdout.Fd()))
 		if err == nil {
 			height = tmpHeight
+			width = tmpWidth
 		}
 	}
 
@@ -182,6 +185,7 @@ func NewPtask(output io.Writer, workerFunc func(*Job), opts ...optFunc) *Ptask {
 		isatty:     tty,
 		color:      aurora.NewAurora(tty),
 		termHeight: height,
+		termWidth:  width,
 	}
 	for _, opt := range opts {
 		opt(t)
@@ -193,6 +197,31 @@ func (c *Ptask) isDrawable(nbJobs int) bool {
 	return c.isatty && c.termHeight >= nbJobs && !c.notDrawable
 }
 
+func (c *Ptask) sizeMaxName(jobs []*Job) int {
+	max := 0
+	for _, j := range jobs {
+		if len(j.Name) > max {
+			max = len(j.Name)
+		}
+	}
+	return max
+}
+
+func (c *Ptask) resizeJobName(sizeMaxName int, jobs []*Job) {
+	if sizeMaxName-20 > c.termWidth {
+		return
+	}
+	for _, j := range jobs {
+		nbSpace := sizeMaxName - len(j.Name)
+		if nbSpace <= 0 {
+			continue
+		}
+		for i := 0; i < nbSpace; i++ {
+			j.Name += " "
+		}
+	}
+}
+
 func (c *Ptask) Run(jobs []*Job, parallel int) error {
 	if !c.noHeader {
 		fmt.Fprintf(c.output, "Running all tasks in parallel with %d workers ... ", parallel)
@@ -200,7 +229,7 @@ func (c *Ptask) Run(jobs []*Job, parallel int) error {
 			fmt.Fprint(c.output, "\n")
 		}
 	}
-
+	c.resizeJobName(c.sizeMaxName(jobs), jobs)
 	nbJobs := len(jobs)
 	jobsChan := make(chan *Job, nbJobs)
 	for _, j := range jobs {
