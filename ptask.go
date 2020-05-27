@@ -131,6 +131,7 @@ func ForceTtyOpt(forceTty bool) optFunc {
 	return func(pt *Ptask) {
 		if forceTty {
 			pt.isatty = forceTty
+			pt.color = aurora.NewAurora(forceTty)
 		}
 	}
 }
@@ -159,6 +160,7 @@ func AllInOneOpt(onlyErrors, noVerbose, compact, forceTty, notDrawable, noHeader
 		pt.compact = compact
 		if forceTty {
 			pt.isatty = forceTty
+			pt.color = aurora.NewAurora(forceTty)
 		}
 		pt.notDrawable = notDrawable
 	}
@@ -208,7 +210,7 @@ func (c *Ptask) sizeMaxName(jobs []*Job) int {
 }
 
 func (c *Ptask) resizeJobName(sizeMaxName int, jobs []*Job) {
-	if sizeMaxName-20 > c.termWidth {
+	if sizeMaxName-20 > c.termWidth && c.termWidth > 0 {
 		return
 	}
 	for _, j := range jobs {
